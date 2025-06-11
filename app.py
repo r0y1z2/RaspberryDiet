@@ -4,6 +4,9 @@ import os
 import sqlite3
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
+import numpy as np
+from ultralytics import YOLO  # 确保使用正确的导入
+from PIL import Image
 
 # 初始化Flask应用
 app = Flask(__name__)
@@ -26,6 +29,9 @@ FOOD_DB = {
     'noodles': 138
 }
 
+# 初始化YOLOv8模型
+model = YOLO("models/yolov8n.pt")  # 确保模型文件路径正确
+
 def init_db():
     """初始化数据库"""
     with sqlite3.connect(app.config['DATABASE']) as conn:
@@ -42,18 +48,27 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
+# def process_image(image_data):
+#     """处理上传的图像数据"""
+#     image_array = np.frombuffer(image_data, np.uint8)
+#     image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+#     return image
+
 def mock_ai_recognition(image_path):
-    """模拟AI识别（实际应接入API）"""
-    # 在此替换为真实的AI识别代码
-    # sample_mapping = {
-    #     'apple': 'apple.jpg',
-    #     'banana': 'banana.jpg',
-    #     'egg': 'egg.jpg'
-    # }
-    # for food, pattern in sample_mapping.items():
-    #     if pattern in image_path.lower():
-    #         return food
-    return 'apple'
+    """使用YOLOv8模型进行图像识别"""
+    results = model(image_path)  # 进行检测
+    detected_objects = []
+    for result in results:
+        boxes = result.boxes
+        for box in boxes:
+            cls = box.cls[0].item()
+            name = result.names[cls]  # 获取检测到的物体名称
+            detected_objects.append(name)
+    
+    # 这里假设你只关心第一个检测到的对象
+    if detected_objects:
+        return detected_objects[0]
+    return None
 
 def get_calories(food_name, weight=100):
     """获取食物热量"""
@@ -109,7 +124,8 @@ def index():
                 # 获取食物信息
                 weight = float(request.form.get('weight', 100))
                 food_name = mock_ai_recognition(save_path)
-                calories = get_calories(food_name, weight)
+                #calories = get_calories(food_name, weight)
+                calories = 100
                 
                 # 写入数据库
                 with sqlite3.connect(app.config['DATABASE']) as conn:
